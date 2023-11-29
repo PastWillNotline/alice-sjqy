@@ -9,8 +9,8 @@
   <artifactId>sjqy</artifactId>
   <version>0.0.1</version>
   <name>sjqy</name>
-  <description>sjqy**********。</description>
-  <url>https://************</url>
+  <description>可视化-数据迁移插件</description>
+  <url>https://github.com/PastWillNotline/alice-sjqy</url>
 
 
   <modules>
