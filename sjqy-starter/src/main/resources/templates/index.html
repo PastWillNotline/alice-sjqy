@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title th:text="${titleInfo}">TitleInfo</title>
+  <link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.css"/>
+  <link rel="stylesheet" type="text/css" href="css/index.css"/>
+</head>
+<body>
+<div class="index-top">
+  <div class="index-top-title" th:text="${titleInfo}">TitleInfo</div>
+</div>
+<div class="index-content" id="tasksDom">
+</div>
+<div class="index-log" id="logsDom">
+</div>
+<script>
+  //开始执行迁移任务
+  function startTask(taskName) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        loadTasksAjax();
+        alert(this.responseText);
+        showOrCloseLog(taskName);
+      }
+    };
+    xhttp.open("GET", "/alice/api/task/start?taskName=" + taskName, true);
+    xhttp.send();
+  }
+
+  //调用后台获取任务状态接口
+  function loadTasksAjax() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        loadTaskHtml(this.responseText)
+      }
+    };
+    xhttp.open("GET", "/alice/api/tasks", true);
+    xhttp.send();
+  }
+
+  //渲染页面dom数据
+  function loadTaskHtml(tasksJson) {
+    var taskResult = JSON.parse(tasksJson);
+    var taskHtml = '';
+    if (taskResult.code == 200) {
+      var tasks = taskResult.data;
+      for (var i = 0; i < tasks.length; i++) {
+        var task = tasks[i];
+        var runStatus = task.runStatus;
+        var sourceDbGroup = task.sourceDbGroup;
+        var targetDbGroup = task.targetDbGroup;
+        var runStatusName = "";
+        var taskName = task.taskName;
+        var buttonHtml = "";
+        if (runStatus == 1) {
+          runStatusName = `<span class="badge bg-secondary">待运行</span>`;
+          buttonHtml = `<div class="btn-group btn-group-sm" role="group" aria-label="Basic mixed styles example">
+                          <button type="button" class="btn btn-outline-primary" onclick="startTask('`+ taskName +`')">执行</button>
+                        </div>`;
+        }
+        if (runStatus == 2) {
+          runStatusName = `<span class="badge bg-success">运行中</span>`;
+          buttonHtml = `<div class="btn-group btn-group-sm" role="group" aria-label="Basic mixed styles example">
+                          <button type="button" class="btn btn-outline-primary" onclick="showOrCloseLog('`+ taskName +`')">日志</button>
+                        </div>`;
+        }
+        if (runStatus == 3) {
+          runStatusName = `<span class="badge bg-secondary">运行结束</span>`;
+          buttonHtml = `<div class="btn-group btn-group-sm" role="group" aria-label="Basic mixed styles example">
+                          <button type="button" class="btn btn-outline-primary" onclick="showOrCloseLog('`+ taskName +`')">日志</button>
+                          <button type="button" class="btn btn-outline-primary" onclick="startTask('`+ taskName +`')">执行</button>
+                        </div>`;
+        }
+        var progress = task.progress;
+        taskHtml = taskHtml + `
+            <div class="index-content-task">
+              <span><strong>` + taskName + `</strong>[` + sourceDbGroup + ` <span style="color: green">-></span> ` + targetDbGroup + `]` + runStatusName
+            + `</span>
+              <div class="progress" style="margin-top: 5px;margin-bottom: 5px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: `
+            + progress + `%;" aria-valuenow="` + progress
+            + `" aria-valuemin="0" aria-valuemax="100">` + progress + `%</div>
+              </div>
+              ` + buttonHtml + `
+            </div>
+            `;
+      }
+    }
+    document.getElementById("tasksDom").innerHTML = taskHtml;
+  }
+
+  //全局变量，是否展示日志
+  var isShowLog = false;
+  //全量变量，当前展示的日志的任务名称
+  var logTaskName = null;
+  //全局变量，上一次日志的条数
+  var lastLogsCount = 0;
+
+  //显示或关闭日志框，并指定当前运行的taskName
+  function showOrCloseLog(taskName) {
+    if(taskName != logTaskName){
+      isShowLog = false;
+    }
+    logTaskName = taskName;
+    lastLogsCount = 0;
+    isMoveLogOverFlow = false;
+    var indexContent = document.getElementById("tasksDom");
+    var indexLog = document.getElementById("logsDom");
+    if (isShowLog == false) {
+      indexContent.style.height = 'calc(100% - 550px)';
+      indexLog.style.height = '500px';
+      loadLogsAjax(taskName);
+    } else {
+      indexContent.style.height = 'calc(100% - 50px)';
+      indexLog.style.height = '0px';
+    }
+    isShowLog = !isShowLog;
+  }
+
+  function loadLogsAjax(taskName) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        loadLogsHtml(this.responseText);
+      }
+    };
+    xhttp.open("GET", "/alice/api/logs?taskName=" + taskName, true);
+    xhttp.send();
+  }
+
+  function loadLogsHtml(logsJson) {
+    var logsResult = JSON.parse(logsJson);
+    var logHtml = ``;
+    if (logsResult.code == 200) {
+      var logs = logsResult.data;
+      var logsLength = logs.length;
+      //全局变量，是否自动将滚动条置底
+      var isMoveLogOverFlow = false;
+      if(lastLogsCount < logsLength) {
+        isMoveLogOverFlow = true;
+      }
+      lastLogsCount = logsLength;
+      for (var i = 0; i < logsLength; i++) {
+        var log = logs[i];
+        var logLevel = log.logLevel;
+        var logInfo = log.createTime + " [" + log.taskName + ":" + log.sourceDbGroup + "-"
+            + log.targetDbGroup + "] " + log.logLevel + "<br>" + log.logInfo;
+        if (logLevel == "INFO") {
+          logHtml += `<div style="width: 100%;color: #ffffff">` + logInfo + `</div>`;
+        }
+        if (logLevel == "ERROR") {
+          logHtml += `<div style="width: 100%;color: red;">` + logInfo + `</div>`;
+        }
+      }
+    }
+    var logsDom = document.getElementById("logsDom");
+    logsDom.innerHTML = logHtml;
+    if(isMoveLogOverFlow) {
+      var logsDivDom = document.getElementById("logsDom");
+      logsDivDom.scrollTop = logsDivDom.scrollHeight;
+    }
+  }
+
+  //首次加载任务信息
+  loadTasksAjax();
+  //定时加载任务信息
+  setInterval(function () {
+    loadTasksAjax();
+    if (logTaskName && isShowLog) {
+      loadLogsAjax(logTaskName);
+    }
+  }, 2000);
+</script>
+</body>
+</html>
